@@ -6,6 +6,11 @@
 #include <vector>
 #include <Windows.h>
 
+#include <psapi.h>
+#include <dbghelp.h>
+
+#pragma comment(lib, "dbghelp.lib")
+
 //
 // From Ntdef.h.
 //
@@ -617,6 +622,39 @@ Cleanup:
     return status;
 }
 
+DWORD GetRvaFromName(HMODULE hModule, const char* functionName) {
+    PBYTE base = (PBYTE)hModule;
+
+    // 1. Navigate to the PE Headers
+    PIMAGE_DOS_HEADER dosHeader = (PIMAGE_DOS_HEADER)base;
+    PIMAGE_NT_HEADERS ntHeaders = (PIMAGE_NT_HEADERS)(base + dosHeader->e_lfanew);
+
+    // 2. Locate the Export Directory
+    IMAGE_DATA_DIRECTORY exportDirInfo = ntHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
+    if (exportDirInfo.Size == 0) return 0;
+
+    PIMAGE_EXPORT_DIRECTORY exportDirectory = (PIMAGE_EXPORT_DIRECTORY)(base + exportDirInfo.VirtualAddress);
+
+    // 3. Get pointers to the Three Tables (Names, Addresses, Ordinals)
+    PDWORD addressOfFunctions = (PDWORD)(base + exportDirectory->AddressOfFunctions);
+    PDWORD addressOfNames = (PDWORD)(base + exportDirectory->AddressOfNames);
+    PWORD addressOfNameOrdinals = (PWORD)(base + exportDirectory->AddressOfNameOrdinals);
+
+    // 4. Iterate through the names to find the match
+    for (DWORD i = 0; i < exportDirectory->NumberOfNames; i++) {
+        char* currentName = (char*)(base + addressOfNames[i]);
+        if (strcmp(currentName, functionName) == 0) {
+            // Found the name! Use the ordinal to find the address index
+            WORD ordinal = addressOfNameOrdinals[i];
+
+            // The value in addressOfFunctions[ordinal] is the RVA
+            return addressOfFunctions[ordinal];
+        }
+    }
+
+    return 0; // Function not found
+}
+
 //
 // Sets the specified privilege in the current process access token.
 // Based on:
@@ -709,6 +747,48 @@ DWORD DummyFunction(LPVOID lpParam)
     return 0;
 }
 
+struct StackProfileEntry {
+    std::wstring modulePath;
+    std::string functionName;
+    ULONG offsetFromExport; // Usually 0x5 or 0x10 to get past the prologue
+    BOOL needLoad;
+};
+
+// Define your "svchost" blueprint
+std::vector<StackProfileEntry> svchostBlueprint = {
+    { L"C:\\Windows\\System32\\kernelbase.dll", "CtrlRoutine", 0x22, FALSE },
+    { L"C:\\Windows\\System32\\ntdll.dll", "TpReleaseCleanupGroupMembers", 0x450, FALSE },
+    { L"C:\\Windows\\System32\\kernel32.dll", "BaseThreadInitThunk", 0x14, FALSE },
+    { L"C:\\Windows\\System32\\ntdll.dll", "RtlUserThreadStart", 0x21, FALSE }
+};
+
+std::vector<StackFrame> BuildDynamicStack(const std::vector<StackProfileEntry>& blueprint) {
+    std::vector<StackFrame> generatedStack;
+
+    for (const auto& entry : blueprint) {
+        // Get or Load the module
+        HMODULE hMod = entry.needLoad ? LoadLibraryW(entry.modulePath.c_str()) : GetModuleHandleW(entry.modulePath.c_str());
+        if (!hMod) hMod = LoadLibraryW(entry.modulePath.c_str()); // Fallback load
+
+        if (hMod) {
+            // Resolve RVA via your EAT parser (GetRvaFromName)
+            DWORD funcRva = GetRvaFromName(hMod, entry.functionName.c_str());
+
+            if (funcRva != 0) {
+                // Create the StackFrame with the dynamic RVA + offset
+                // Add a small offset because a return address is never at the start of a function
+                DWORD finalRva = funcRva + entry.offsetFromExport;
+
+                generatedStack.push_back(StackFrame(entry.modulePath, finalRva, 0, entry.needLoad));
+
+                printf("[+] Resolved %S!%s to RVA: %lX\n",
+                    entry.modulePath.c_str(), entry.functionName.c_str(), finalRva);
+            }
+        }
+    }
+    return generatedStack;
+}
+
 NTSTATUS HandleArgs(int argc, char* argv[], std::vector<StackFrame> &targetCallStack)
 {
 
@@ -735,8 +815,10 @@ NTSTATUS HandleArgs(int argc, char* argv[], std::vector<StackFrame> &targetCallS
         }
         else if (callstackArg == "--svchost")
         {
-            std::cout << "[+] Target call stack profile to spoof is svchost\n";
-            targetCallStack = svchostCallStack;
+            // replacing the static call stack with dynamic resolution
+            //std::cout << "[+] Target call stack profile to spoof is svchost\n";
+            //targetCallStack = svchostCallStack;            
+            targetCallStack = BuildDynamicStack(svchostBlueprint);
         }
         else
         {
@@ -896,4 +978,3 @@ int main(int argc, char* argv[])
     }
     return 0;
 }
-
