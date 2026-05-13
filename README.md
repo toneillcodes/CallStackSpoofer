@@ -1,5 +1,76 @@
 # CallStackSpoofer
 
+## Enhancements & Architectural Updates
+
+This fork of the **VulcanRaven** project introduces enhancements to the original PoC, transitioning from a static, version-locked implementation to a **dynamic, portable evasion engine**. The primary focus is on build-agnostic stability and modularity.
+
+## Key Features
+### 1. Dynamic RVA Resolution (EAT Parsing)
+The original project relied on hardcoded offsets (Magic Numbers) tied to specific Windows builds. If target DLLs were updated (e.g., via Windows Update), the offsets would break.
+*   **Improvement:** Implemented a custom **Export Address Table (EAT) Parser** (`GetRvaFromName`).
+*   **Impact:** The tool now resolves function locations at runtime. This makes the spoofer build-agnostic and significantly more stable across different versions of Windows 10 and 11.
+
+### 2. Blueprint-Based Stack Profiling
+Separated the definition of a call stack from the logic that constructs it.
+*   **Improvement:** Introduced the `StackProfileEntry` structure. This allows users to define a target process's call stack using high-level metadata (Module Name + Function Name + Relative Offset) rather than raw hex deltas.
+*   **Modularity:** New profiles (e.g., `explorer.exe` or `msedge.exe`) can be added by simply defining a new blueprint vector.
+
+### 3. Automated Stack Construction Engine
+Developed a factory function, `BuildDynamicStack`, to automate the transformation of a Blueprint into a functional `StackFrame` vector.
+*   **Automation:** This engine handles module lookup, on-demand library loading, and final RVA calculations automatically.
+*   **Reliability:** Included fallback loading mechanisms to ensure the spoofed thread always has a valid environment to execute within.
+
+## Comparison
+### Comparison at a Glance
+| Feature | Original Implementation | This Version |
+| :--- | :--- | :--- |
+| **Offset Stability** | **Build-Dependent:** Hardcoded from Image Base | **Build-Agnostic:** Dynamic via EAT Parsing |
+| **Configuration** | Manual `StackFrame` arrays | Modular `StackProfileEntry` Blueprints |
+| **Maintenance** | High risk of crash on OS update | High reliability via runtime resolution |
+
+## Usage
+### LSASS Proof-of-Concept
+The project now supports dynamic building of the `svchost` profile. 
+The PoC will attempt to identify the LSASS process and open a handle to generate a sysmon event.  
+Trigger the dynamic resolution with the `--svchost` option:
+```bash
+# Spoof using the dynamically resolved svchost blueprint
+> VulcanRaven.exe --svchost
+
+
+                             $$\
+                             $$ |
+        $$\    $$\ $$\   $$\ $$ | $$$$$$$\ $$$$$$\  $$$$$$$\         $$$$$$\  $$$$$$\ $$\    $$\  $$$$$$\  $$$$$$$\
+        \$$\  $$  |$$ |  $$ |$$ |$$  _____|\____$$\ $$  __$$\       $$  __$$\ \____$$\\$$\  $$  |$$  __$$\ $$  __$$\
+         \$$\$$  / $$ |  $$ |$$ |$$ /      $$$$$$$ |$$ |  $$ |      $$ |  \__|$$$$$$$ |\$$\$$  / $$$$$$$$ |$$ |  $$ |
+          \$$$  /  $$ |  $$ |$$ |$$ |     $$  __$$ |$$ |  $$ |      $$ |     $$  __$$ | \$$$  /  $$   ____|$$ |  $$ |
+           \$  /   \$$$$$$  |$$ |\$$$$$$$\\$$$$$$$ |$$ |  $$ |      $$ |     \$$$$$$$ |  \$  /   \$$$$$$$\ $$ |  $$ |
+            \_/     \______/ \__| \_______|\_______|\__|  \__|      \__|      \_______|   \_/     \_______|\__|  \__|
+
+                                       Call Stack Spoofer            William Burgess @joehowwolf
+
+[+] Resolved C:\Windows\System32\kernelbase.dll!CtrlRoutine to RVA: CB892
+[+] Resolved C:\Windows\System32\ntdll.dll!TpReleaseCleanupGroupMembers to RVA: D8C00
+[+] Resolved C:\Windows\System32\kernel32.dll!BaseThreadInitThunk to RVA: 2E8D4
+[+] Resolved C:\Windows\System32\ntdll.dll!RtlUserThreadStart to RVA: 8C531
+[+] Initialising fake call stack...
+[+] Created suspended thread
+[+] Initialising spoofed thread state...
+[+] Resuming suspended thread...
+[+] Sleeping for 5 seconds...
+[+] VEH Exception Handler called
+[+] Re-directing spoofed thread to RtlExitUserThread
+[+] Successfully obtained handle to lsass with spoofed callstack: 0000000000000110
+[+] Check SysMon event logs to view spoofed callstack: Applications and Services --> Microsoft --> Windows --> Sysmon
+
+>
+```
+
+## Future Improvements
+### Dynamic Entry Resolution
+
+
+# Original Readme
 This repository demonstrates a PoC implementation to spoof arbitrary call stacks when making system calls. For a full technical walkthrough please see
 the accompanying blog post here: https://labs.withsecure.com/blog/spoofing-call-stacks-to-confuse-edrs.
 
