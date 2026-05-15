@@ -101,6 +101,17 @@ Trigger the dynamic resolution with the `--svchost` option:
 * WMI (Part of the original project)
 * RPC (Part of the original project)
 
+## References
+* [William Burgess: Spoofing Call Stacks To Confuse EDRs](https://labs.withsecure.com/publications/spoofing-call-stacks-to-confuse-edrs)
+* [Dylan Tran: An Introduction into Stack Spoofing](https://dtsec.us/2023-09-15-StackSpoofin/)
+
+## AI Usage
+AI was leveraged as a force multiplier in the research and development of this project.
+### Research
+* Gemini 3.1 Pro assisted
+### Development
+* Gemini 3.1 Pro assisted
+
 # Original Readme
 This repository demonstrates a PoC implementation to spoof arbitrary call stacks when making system calls. For a full technical walkthrough please see
 the accompanying blog post here: https://labs.withsecure.com/blog/spoofing-call-stacks-to-confuse-edrs.
