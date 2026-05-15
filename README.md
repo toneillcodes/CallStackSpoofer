@@ -56,10 +56,10 @@ C:\Tools\sysinternals>
 
 ### LSASS Access Proof-of-Concept
 The project now supports . 
-The PoC will attempt to identify the LSASS process, building a dynamic synthetic call stack for the `svchost` profile, and open a handle to generate a sysmon event.  
+The PoC will attempt to identify the LSASS process, using a dynamic resolution method to build synthetic call stack frames for the `svchost` profile, and open a handle to generate a sysmon event.  
 Trigger the dynamic resolution with the `--svchost` option:
 ```bash
-# Spoof using the dynamically resolved svchost blueprint
+# Spoof the call stack with synthetic frames dynamically resolved from the svchost blueprint
 > VulcanRaven.exe --svchost
 
 
@@ -73,6 +73,7 @@ Trigger the dynamic resolution with the `--svchost` option:
             \_/     \______/ \__| \_______|\_______|\__|  \__|      \__|      \_______|   \_/     \_______|\__|  \__|
 
                                        Call Stack Spoofer            William Burgess @joehowwolf
+                                       Enhancements                  Tom O'Neill @toneillcodes
 
 [+] Resolved C:\Windows\System32\kernelbase.dll!CtrlRoutine to RVA: CB892
 [+] Resolved C:\Windows\System32\ntdll.dll!TpReleaseCleanupGroupMembers to RVA: D8C00
@@ -91,9 +92,14 @@ Trigger the dynamic resolution with the `--svchost` option:
 >
 ```
 
+![readmeexample](assets/call-stack-spoof-poc.png)
+
 ## Future Improvements
 ### Dynamic Entry Resolution
-
+* Enhancing the project to programatically determine the function offsets to avoid having any hard-coded values.
+### Additional Call Stacks
+* WMI (Part of the original project)
+* RPC (Part of the original project)
 
 # Original Readme
 This repository demonstrates a PoC implementation to spoof arbitrary call stacks when making system calls. For a full technical walkthrough please see
